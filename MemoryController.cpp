@@ -482,6 +482,7 @@ void MemoryController::update()
 		if (outgoingCmdPacket != NULL)
 		{
 			ERROR("== Error - Command Bus Collision");
+			printf("packet type: %d", outgoingCmdPacket->busPacketType);
 			exit(-1);
 		}
 		outgoingCmdPacket = poppedBusPacket;
