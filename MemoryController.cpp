@@ -858,29 +858,29 @@ void MemoryController::printStats(bool finalStats)
 		PRINT( " ("<<totalReadsPerRank[r] * bytesPerTransaction<<" bytes)");
 		PRINTN( "        -Writes : " << totalWritesPerRank[r]);
 		PRINT( " ("<<totalWritesPerRank[r] * bytesPerTransaction<<" bytes)");
-		for (size_t j=0;j<NUM_BANKS;j++)
-		{
-			PRINT( "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns");
-		}
+		//for (size_t j=0;j<NUM_BANKS;j++)
+		//{
+		//	PRINT( "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns");
+		//}
 
 		// factor of 1000 at the end is to account for the fact that totalEnergy is accumulated in mJ since IDD values are given in mA
-		backgroundPower[r] = ((double)backgroundEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
-		burstPower[r] = ((double)burstEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
-		refreshPower[r] = ((double) refreshEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
-		actprePower[r] = ((double)actpreEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
-		averagePower[r] = ((backgroundEnergy[r] + burstEnergy[r] + refreshEnergy[r] + actpreEnergy[r]) / (double)cyclesElapsed) * Vdd / 1000.0;
+		//backgroundPower[r] = ((double)backgroundEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
+		//burstPower[r] = ((double)burstEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
+		//refreshPower[r] = ((double) refreshEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
+		//actprePower[r] = ((double)actpreEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
+		//averagePower[r] = ((backgroundEnergy[r] + burstEnergy[r] + refreshEnergy[r] + actpreEnergy[r]) / (double)cyclesElapsed) * Vdd / 1000.0;
 
-		if ((*parentMemorySystem->ReportPower)!=NULL)
-		{
-			(*parentMemorySystem->ReportPower)(backgroundPower[r],burstPower[r],refreshPower[r],actprePower[r]);
-		}
+		//if ((*parentMemorySystem->ReportPower)!=NULL)
+		//{
+		//	(*parentMemorySystem->ReportPower)(backgroundPower[r],burstPower[r],refreshPower[r],actprePower[r]);
+		//}
 
-		PRINT( " == Power Data for Rank        " << r );
-		PRINT( "   Average Power (watts)     : " << averagePower[r] );
-		PRINT( "     -Background (watts)     : " << backgroundPower[r] );
-		PRINT( "     -Act/Pre    (watts)     : " << actprePower[r] );
-		PRINT( "     -Burst      (watts)     : " << burstPower[r]);
-		PRINT( "     -Refresh    (watts)     : " << refreshPower[r] );
+		//PRINT( " == Power Data for Rank        " << r );
+		//PRINT( "   Average Power (watts)     : " << averagePower[r] );
+		//PRINT( "     -Background (watts)     : " << backgroundPower[r] );
+		//PRINT( "     -Act/Pre    (watts)     : " << actprePower[r] );
+		//PRINT( "     -Burst      (watts)     : " << burstPower[r]);
+		//PRINT( "     -Refresh    (watts)     : " << refreshPower[r] );
 
 		if (VIS_FILE_OUTPUT)
 		{
