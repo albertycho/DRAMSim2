@@ -88,8 +88,15 @@ MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ost
 	grandTotalBankAccesses = vector<uint64_t>(NUM_RANKS*NUM_BANKS,0);
 	totalReadsPerBank = vector<uint64_t>(NUM_RANKS*NUM_BANKS,0);
 	totalWritesPerBank = vector<uint64_t>(NUM_RANKS*NUM_BANKS,0);
+	totalACTsPerBank = vector<uint64_t>(NUM_RANKS*NUM_BANKS,0);
+	totalPREsPerBank = vector<uint64_t>(NUM_RANKS*NUM_BANKS,0);
+	totalREFsPerBank = vector<uint64_t>(NUM_RANKS*NUM_BANKS,0);
+
 	totalReadsPerRank = vector<uint64_t>(NUM_RANKS,0);
 	totalWritesPerRank = vector<uint64_t>(NUM_RANKS,0);
+	totalACTsPerRank = vector<uint64_t>(NUM_RANKS,0);
+	totalPREsPerRank = vector<uint64_t>(NUM_RANKS,0);
+	totalREFsPerRank = vector<uint64_t>(NUM_RANKS,0);
 
 	writeDataCountdown.reserve(NUM_RANKS);
 	writeDataToSend.reserve(NUM_RANKS);
@@ -197,6 +204,19 @@ void MemoryController::update()
 		cmdCyclesLeft--;
 		if (cmdCyclesLeft == 0) //packet is ready to be received by rank
 		{
+			switch(outgoingCmdPacket->busPacketType) {
+				case ACTIVATE:
+					totalACTsPerBank[SEQUENTIAL(outgoingCmdPacket->rank, outgoingCmdPacket->bank)]++;
+					break;
+				case PRECHARGE:
+					totalPREsPerBank[SEQUENTIAL(outgoingCmdPacket->rank, outgoingCmdPacket->bank)]++;
+					break;
+				case REFRESH:
+					totalREFsPerBank[SEQUENTIAL(outgoingCmdPacket->rank, outgoingCmdPacket->bank)]++;
+					break;
+				default:
+					;
+			}
 			(*ranks)[outgoingCmdPacket->rank]->receiveFromBus(outgoingCmdPacket);
 			outgoingCmdPacket = NULL;
 		}
@@ -447,7 +467,6 @@ void MemoryController::update()
 				bankStates[rank][bank].lastCommand = PRECHARGE;
 				bankStates[rank][bank].stateChangeCountdown = tRP;
 				bankStates[rank][bank].nextActivate = max(currentClockCycle + tRP, bankStates[rank][bank].nextActivate);
-
 				break;
 			case REFRESH:
 				//add energy to account for total
@@ -790,6 +809,9 @@ void MemoryController::resetStats()
 			grandTotalBankAccesses[SEQUENTIAL(i,j)] += totalReadsPerBank[SEQUENTIAL(i,j)] + totalWritesPerBank[SEQUENTIAL(i,j)];
 			totalReadsPerBank[SEQUENTIAL(i,j)] = 0;
 			totalWritesPerBank[SEQUENTIAL(i,j)] = 0;
+			totalACTsPerBank[SEQUENTIAL(i,j)] = 0;
+			totalPREsPerBank[SEQUENTIAL(i,j)] = 0;
+			totalREFsPerBank[SEQUENTIAL(i,j)] = 0;
 			totalEpochLatency[SEQUENTIAL(i,j)] = 0;
 		}
 
@@ -799,6 +821,9 @@ void MemoryController::resetStats()
 		backgroundEnergy[i] = 0;
 		totalReadsPerRank[i] = 0;
 		totalWritesPerRank[i] = 0;
+		totalACTsPerRank[i] = 0;
+		totalPREsPerRank[i] = 0;
+		totalREFsPerRank[i] = 0;
 	}
 }
 //prints statistics at the end of an epoch or  simulation
@@ -825,6 +850,7 @@ void MemoryController::printStats(bool finalStats)
 	vector<double> bandwidth = vector<double>(NUM_RANKS*NUM_BANKS,0.0);
 
 	double totalBandwidth=0.0;
+
 	for (size_t i=0;i<NUM_RANKS;i++)
 	{
 		for (size_t j=0; j<NUM_BANKS; j++)
@@ -834,6 +860,9 @@ void MemoryController::printStats(bool finalStats)
 			totalBandwidth+=bandwidth[SEQUENTIAL(i,j)];
 			totalReadsPerRank[i] += totalReadsPerBank[SEQUENTIAL(i,j)];
 			totalWritesPerRank[i] += totalWritesPerBank[SEQUENTIAL(i,j)];
+			totalACTsPerRank[i] += totalACTsPerBank[SEQUENTIAL(i,j)];
+			totalPREsPerRank[i] += totalPREsPerBank[SEQUENTIAL(i,j)];
+			totalREFsPerRank[i] += totalREFsPerBank[SEQUENTIAL(i,j)];
 		}
 	}
 #ifdef LOG_OUTPUT
@@ -858,38 +887,50 @@ void MemoryController::printStats(bool finalStats)
 		PRINT( " ("<<totalReadsPerRank[r] * bytesPerTransaction<<" bytes)");
 		PRINTN( "        -Writes : " << totalWritesPerRank[r]);
 		PRINT( " ("<<totalWritesPerRank[r] * bytesPerTransaction<<" bytes)");
-		for (size_t j=0;j<NUM_BANKS;j++)
-		{
-			PRINT( "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns");
+		double hitrate = 0.0;
+		if (totalReadsPerRank[r] + totalWritesPerRank[r] > totalACTsPerRank[r]) {
+			hitrate = float(totalReadsPerRank[r] + totalWritesPerRank[r] - totalACTsPerRank[r])
+						/float(totalReadsPerRank[r] + totalWritesPerRank[r]);
 		}
+		std::string out = "      EpochREADS " + std::to_string(totalReadsPerRank[r]) + "\n"
+						+ "      EpochWRITES " + std::to_string(totalWritesPerRank[r]) + "\n"
+						+ "      EpochACTS " + std::to_string(totalACTsPerRank[r]) + "\n"
+						+ "      EpochPRES " + std::to_string(totalPREsPerRank[r]) + "\n"
+						+ "      EpochREFS " + std::to_string(totalREFsPerRank[r]) + "\n"
+						+ "      EpochHitRate " + std::to_string(hitrate) + "\n";
+		PRINT(out);
+		// for (size_t j=0;j<NUM_BANKS;j++)
+		// {
+		// 	PRINT( "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns");
+		// }
 
 		// factor of 1000 at the end is to account for the fact that totalEnergy is accumulated in mJ since IDD values are given in mA
-		backgroundPower[r] = ((double)backgroundEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
-		burstPower[r] = ((double)burstEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
-		refreshPower[r] = ((double) refreshEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
-		actprePower[r] = ((double)actpreEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
-		averagePower[r] = ((backgroundEnergy[r] + burstEnergy[r] + refreshEnergy[r] + actpreEnergy[r]) / (double)cyclesElapsed) * Vdd / 1000.0;
+		// backgroundPower[r] = ((double)backgroundEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
+		// burstPower[r] = ((double)burstEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
+		// refreshPower[r] = ((double) refreshEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
+		// actprePower[r] = ((double)actpreEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
+		// averagePower[r] = ((backgroundEnergy[r] + burstEnergy[r] + refreshEnergy[r] + actpreEnergy[r]) / (double)cyclesElapsed) * Vdd / 1000.0;
 
-		if ((*parentMemorySystem->ReportPower)!=NULL)
-		{
-			(*parentMemorySystem->ReportPower)(backgroundPower[r],burstPower[r],refreshPower[r],actprePower[r]);
-		}
+		// if ((*parentMemorySystem->ReportPower)!=NULL)
+		// {
+		// 	(*parentMemorySystem->ReportPower)(backgroundPower[r],burstPower[r],refreshPower[r],actprePower[r]);
+		// }
 
-		PRINT( " == Power Data for Rank        " << r );
-		PRINT( "   Average Power (watts)     : " << averagePower[r] );
-		PRINT( "     -Background (watts)     : " << backgroundPower[r] );
-		PRINT( "     -Act/Pre    (watts)     : " << actprePower[r] );
-		PRINT( "     -Burst      (watts)     : " << burstPower[r]);
-		PRINT( "     -Refresh    (watts)     : " << refreshPower[r] );
+		// PRINT( " == Power Data for Rank        " << r );
+		// PRINT( "   Average Power (watts)     : " << averagePower[r] );
+		// PRINT( "     -Background (watts)     : " << backgroundPower[r] );
+		// PRINT( "     -Act/Pre    (watts)     : " << actprePower[r] );
+		// PRINT( "     -Burst      (watts)     : " << burstPower[r]);
+		// PRINT( "     -Refresh    (watts)     : " << refreshPower[r] );
 
 		if (VIS_FILE_OUTPUT)
 		{
 		//	cout << "c="<<myChannel<< " r="<<r<<"writing to csv out on cycle "<< currentClockCycle<<endl;
 			// write the vis file output
-			csvOut << CSVWriter::IndexedName("Background_Power",myChannel,r) <<backgroundPower[r];
-			csvOut << CSVWriter::IndexedName("ACT_PRE_Power",myChannel,r) << actprePower[r];
-			csvOut << CSVWriter::IndexedName("Burst_Power",myChannel,r) << burstPower[r];
-			csvOut << CSVWriter::IndexedName("Refresh_Power",myChannel,r) << refreshPower[r];
+			// csvOut << CSVWriter::IndexedName("Background_Power",myChannel,r) <<backgroundPower[r];
+			// csvOut << CSVWriter::IndexedName("ACT_PRE_Power",myChannel,r) << actprePower[r];
+			// csvOut << CSVWriter::IndexedName("Burst_Power",myChannel,r) << burstPower[r];
+			// csvOut << CSVWriter::IndexedName("Refresh_Power",myChannel,r) << refreshPower[r];
 			double totalRankBandwidth=0.0;
 			for (size_t b=0; b<NUM_BANKS; b++)
 			{

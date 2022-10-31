@@ -106,10 +106,15 @@ private:
 	vector<uint64_t> grandTotalBankAccesses; 
 	vector<uint64_t> totalReadsPerBank;
 	vector<uint64_t> totalWritesPerBank;
+	vector<uint64_t> totalACTsPerBank;
+	vector<uint64_t> totalPREsPerBank;
+	vector<uint64_t> totalREFsPerBank;
 
 	vector<uint64_t> totalReadsPerRank;
 	vector<uint64_t> totalWritesPerRank;
-
+	vector<uint64_t> totalACTsPerRank;
+	vector<uint64_t> totalPREsPerRank;
+	vector<uint64_t> totalREFsPerRank;
 
 	vector< uint64_t > totalEpochLatency;
 
