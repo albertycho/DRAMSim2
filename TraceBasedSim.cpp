@@ -153,12 +153,13 @@ void usage()
 }
 #endif
 
-void *parseTraceFileLine(string &line, uint64_t &addr, enum TransactionType &transType, uint64_t &clockCycle, TraceType type, bool useClockCycle)
+void *parseTraceFileLine(string &line, uint64_t &addr, enum TransactionType &transType, uint64_t &clockCycle, TraceType type, bool useClockCycle, bool &is_prio)
 {
 	size_t previousIndex=0;
 	size_t spaceIndex=0;
+        size_t prioIndex=0;
 	uint64_t *dataBuffer = NULL;
-	string addressStr="", cmdStr="", dataStr="", ccStr="";
+	string addressStr="", cmdStr="", dataStr="", ccStr="", ccPrio="";
 
 	switch (type)
 	{
@@ -175,6 +176,10 @@ void *parseTraceFileLine(string &line, uint64_t &addr, enum TransactionType &tra
 
 		spaceIndex = line.find_first_not_of(" ", previousIndex);
 		ccStr = line.substr(spaceIndex, line.find_first_of(" ", spaceIndex) - spaceIndex);
+
+                prioIndex = line.find_first_of(" ", spaceIndex)+1;
+                ccPrio = line.substr(prioIndex, line.size() - prioIndex);
+                is_prio = std::stoi(ccPrio);
 
 		if (cmdStr.compare("P_MEM_WR")==0 ||
 		        cmdStr.compare("BOFF")==0)
@@ -204,6 +209,8 @@ void *parseTraceFileLine(string &line, uint64_t &addr, enum TransactionType &tra
 			istringstream b(ccStr);
 			b>>clockCycle;
 		}
+
+                spaceIndex = line.find_first_of(" ", spaceIndex);
 		break;
 	}
 	case mase:
@@ -288,7 +295,7 @@ void *parseTraceFileLine(string &line, uint64_t &addr, enum TransactionType &tra
 		}
 		if (SHOW_SIM_OUTPUT)
 		{
-			DEBUGN("ADDR='"<<hex<<addr<<dec<<"',CMD='"<<transType<<"'");//',DATA='"<<dataBuffer[0]<<"'");
+			DEBUGN("ADDR='"<<hex<<addr<<dec<<"',CMD='"<<transType<<"'");//',DATA='"<<dataBuffej[0]<<"'");
 		}
 
 		//parse data
@@ -527,6 +534,7 @@ int main(int argc, char **argv)
 	uint64_t addr;
 	uint64_t clockCycle=0;
 	enum TransactionType transType;
+        bool is_prio=false;
 
 	void *data = NULL;
 	int lineNumber = 0;
@@ -551,8 +559,8 @@ int main(int argc, char **argv)
 
 				if (line.size() > 0)
 				{
-					data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
-					trans = new Transaction(transType, addr, data);
+					data = parseTraceFileLine(line, addr, transType,clockCycle, traceType, useClockCycle, is_prio);
+					trans = new Transaction(transType, addr, is_prio, data);
 					alignTransactionAddress(*trans); 
 
 					if (i>=clockCycle)

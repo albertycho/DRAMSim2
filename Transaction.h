@@ -52,6 +52,7 @@ enum TransactionType
 class Transaction
 {
 	Transaction();
+        Transaction(bool prio): prio{prio} {}
 public:
 	//fields
 	TransactionType transactionType;
@@ -59,11 +60,12 @@ public:
 	void *data;
 	uint64_t timeAdded;
 	uint64_t timeReturned;
+    bool prio;
 
 
 	friend ostream &operator<<(ostream &os, const Transaction &t);
 	//functions
-	Transaction(TransactionType transType, uint64_t addr, void *data);
+	Transaction(TransactionType transType, uint64_t addr, bool is_prio, void *data);
 	Transaction(const Transaction &t);
 
 	BusPacketType getBusPacketType()

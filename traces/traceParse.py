@@ -4,6 +4,7 @@ import re, os
 import string
 import sys
 import array
+import random
 
 if len(sys.argv) != 2:
   sys.exit("Must specify trace file (.gz)")
@@ -51,7 +52,7 @@ if tracefile_filename.startswith("k6"):
         time = time.replace(",","")
         time = time.replace(".","")
         if command != "BOFF" and command != "P_INT_ACK":
-            outfile.write("%s %s %s\n" % (address,command,time)) 
+            outfile.write("%s %s %s %s\n" % (address,command,time, random.choice([0, 1]))) 
             
 elif tracefile_filename.startswith("mase"):
   print("mase trace ..."),

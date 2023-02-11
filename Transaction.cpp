@@ -43,10 +43,11 @@ using std::dec;
 
 namespace DRAMSim {
 
-Transaction::Transaction(TransactionType transType, uint64_t addr, void *dat) :
+Transaction::Transaction(TransactionType transType, uint64_t addr, bool is_prio, void *dat) :
 	transactionType(transType),
 	address(addr),
-	data(dat)
+	data(dat),
+        prio(is_prio)
 {}
 
 Transaction::Transaction(const Transaction &t)

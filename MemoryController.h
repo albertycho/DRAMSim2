@@ -71,7 +71,8 @@ public:
 
 
 	//fields
-	vector<Transaction *> transactionQueue;
+        vector<Transaction *> transactionQueue;
+	vector<Transaction *> prioQueue;
 private:
 	ostream &dramsim_log;
 	vector< vector <BankState> > bankStates;

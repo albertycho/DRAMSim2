@@ -84,6 +84,9 @@ MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ost
 
 	//reserve memory for vectors
 	transactionQueue.reserve(TRANS_QUEUE_DEPTH);
+
+	prioQueue.reserve(TRANS_QUEUE_DEPTH);
+
 	powerDown = vector<bool>(NUM_RANKS,false);
 	grandTotalBankAccesses = vector<uint64_t>(NUM_RANKS*NUM_BANKS,0);
 	totalReadsPerBank = vector<uint64_t>(NUM_RANKS*NUM_BANKS,0);
@@ -134,7 +137,7 @@ void MemoryController::receiveFromBus(BusPacket *bpacket)
 	}
 
 	//add to return read data queue
-	returnTransaction.push_back(new Transaction(RETURN_DATA, bpacket->physicalAddress, bpacket->data));
+	returnTransaction.push_back(new Transaction(RETURN_DATA, bpacket->physicalAddress, false, bpacket->data));
 	totalReadsPerBank[SEQUENTIAL(bpacket->rank,bpacket->bank)]++;
 
 	// this delete statement saves a mindboggling amount of memory
@@ -509,6 +512,86 @@ void MemoryController::update()
 
 	}
 
+	for (size_t i=0;i<prioQueue.size();i++)
+	{
+		//pop off top transaction from queue
+		//
+		//	assuming simple scheduling at the moment
+		//	will eventually add policies here
+		Transaction *transaction = prioQueue[i];
+
+		//map address to rank,bank,row,col
+		unsigned newTransactionChan, newTransactionRank, newTransactionBank, newTransactionRow, newTransactionColumn;
+
+		// pass these in as references so they get set by the addressMapping function
+		addressMapping(transaction->address, newTransactionChan, newTransactionRank, newTransactionBank, newTransactionRow, newTransactionColumn);
+
+		//if we have room, break up the transaction into the appropriate commands
+		//and add them to the command queue
+		if (commandQueue.hasRoomFor(2, newTransactionRank, newTransactionBank))
+		{
+			if (DEBUG_ADDR_MAP) 
+			{
+				PRINTN("== New Transaction - Mapping Address [0x" << hex << transaction->address << dec << "]");
+				if (transaction->transactionType == DATA_READ) 
+				{
+					PRINT(" (Read)");
+				}
+				else
+				{
+					PRINT(" (Write)");
+				}
+				PRINT("  Rank : " << newTransactionRank);
+				PRINT("  Bank : " << newTransactionBank);
+				PRINT("  Row  : " << newTransactionRow);
+				PRINT("  Col  : " << newTransactionColumn);
+			}
+
+
+
+			//now that we know there is room in the command queue, we can remove from the transaction queue
+			prioQueue.erase(prioQueue.begin()+i);
+
+			//create activate command to the row we just translated
+			BusPacket *ACTcommand = new BusPacket(ACTIVATE, transaction->address,
+					newTransactionColumn, newTransactionRow, newTransactionRank,
+					newTransactionBank, 0, dramsim_log);
+
+			//create read or write command and enqueue it
+			BusPacketType bpType = transaction->getBusPacketType();
+			BusPacket *command = new BusPacket(bpType, transaction->address,
+					newTransactionColumn, newTransactionRow, newTransactionRank,
+					newTransactionBank, transaction->data, dramsim_log);
+
+
+
+			commandQueue.enqueue(ACTcommand);
+			commandQueue.enqueue(command);
+
+			// If we have a read, save the transaction so when the data comes back
+			// in a bus packet, we can staple it back into a transaction and return it
+			if (transaction->transactionType == DATA_READ)
+			{
+				pendingReadTransactions.push_back(transaction);
+			}
+			else
+			{
+				// just delete the transaction now that it's a buspacket
+				delete transaction; 
+			}
+			/* only allow one transaction to be scheduled per cycle -- this should
+			 * be a reasonable assumption considering how much logic would be
+			 * required to schedule multiple entries per cycle (parallel data
+			 * lines, switching logic, decision logic)
+			 */
+			break;
+		}
+		else // no room, do nothing this cycle
+		{
+			//PRINT( "== Warning - No room in command queue" << endl;
+		}
+	}
+
 	for (size_t i=0;i<transactionQueue.size();i++)
 	{
 		//pop off top transaction from queue
@@ -781,7 +864,7 @@ void MemoryController::update()
 
 bool MemoryController::WillAcceptTransaction()
 {
-	return transactionQueue.size() < TRANS_QUEUE_DEPTH;
+	return transactionQueue.size() + prioQueue.size() < TRANS_QUEUE_DEPTH;
 }
 
 //allows outside source to make request of memory system
@@ -790,7 +873,11 @@ bool MemoryController::addTransaction(Transaction *trans)
 	if (WillAcceptTransaction())
 	{
 		trans->timeAdded = currentClockCycle;
+      if (trans->prio) {
+        prioQueue.push_back(trans);
+      } else {
 		transactionQueue.push_back(trans);
+      }
 		return true;
 	}
 	else 
