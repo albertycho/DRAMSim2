@@ -1,16 +1,18 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import re, os
 import sys
-import random
+import numpy as np
+from numpy.random import choice
 import typer
-from typing import Optional
+from typing import Optional, List
 
 
 def main(
     gztrace_filename: str,
     tracefile_filename: Optional[str] = typer.Argument(None),
     prio: int = typer.Argument(0),
+    weights: Optional[List[float]] = typer.Argument(None),
 ):
     """
     gztrace_filename: gzipped trace file name
@@ -18,13 +20,39 @@ def main(
     tracefile_filename: output trace file name
 
     prio: What prios can be given
+
+    weights: Weights for prios
     """
-    #  gztrace_filename = sys.argv[1]
-    #  tracefile_filename = sys.argv[1][0:len(sys.argv[1])-3]
     if tracefile_filename is None:
         tracefile_filename = gztrace_filename[0 : len(sys.argv[1]) - 3]
 
-    prios = list(range(0, prio+1))
+    if weights is None or len(weights) == 0:
+        weights = [1.0 / (prio + 1)] * (prio + 1)
+
+
+    # Distribute weight...
+    if len(weights) <= prio:
+        s0 = 1 - sum(weights)
+
+        while len(weights) <= prio:
+            weights.append(s0 / (prio))
+
+    if sum(weights) != 1:
+        print(
+            f"""ERROR: sum of weights not equal to 1.\nDo you wish to augment the probability of zero? y/n"""
+        )
+
+        yPattern = re.compile(r"^[yY][eE]?[sS]?$")
+        nPattern = re.compile(r"^[nN][oO]?$")
+        c = input()
+        while yPattern.match(c) is None and nPattern.match(c) is None:
+            c = input("Invalid input. Please enter y[es] / n[o]")
+
+        if yPattern.match(c) is not None and nPattern.match(c) is None:
+            weights[0] += 1 - sum(weights)
+            
+
+    print(f"Weights: {weights}")
 
     with open(tracefile_filename, "w") as outfile:
         temp_trace = tracefile_filename + ".temp"
@@ -52,9 +80,7 @@ def main(
 
         if gztrace_filename.startswith("k6"):
             print("k6 trace ...")
-            linePattern = re.compile(
-                r"(0x[0-9A-F]+)\s+([A-Z_]+)\s+([0-9.,]+)\s+(.*)"
-            )
+            linePattern = re.compile(r"(0x[0-9A-F]+)\s+([A-Z_]+)\s+([0-9.,]+)\s+(.*)")
             for line in tracefile:
                 searchResult = linePattern.search(line)
                 if searchResult:
@@ -70,7 +96,12 @@ def main(
                     if command != "BOFF" and command != "P_INT_ACK":
                         outfile.write(
                             "%s %s %s %s\n"
-                            % (address, command, time, random.choice(prios))
+                            % (
+                                address,
+                                command,
+                                time,
+                                choice(np.arange(prio + 1), p=weights),
+                            )
                         )
 
         elif gztrace_filename.startswith("mase"):
