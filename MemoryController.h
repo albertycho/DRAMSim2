@@ -75,7 +75,8 @@ private:
   ostream &dramsim_log;
   vector<vector<BankState>> bankStates;
   // functions
-  void insertHistogram(unsigned latencyValue, unsigned rank, unsigned bank);
+  void insertHistogram(unsigned latencyValue, unsigned rank, unsigned bank,
+                       bool prio);
 
   // fields
   MemorySystem *parentMemorySystem;
@@ -88,6 +89,7 @@ private:
   vector<Transaction *> returnTransaction;
   vector<Transaction *> pendingReadTransactions;
   map<unsigned, unsigned> latencies; // latencyValue -> latencyCount
+  map<unsigned, unsigned> prio_lats;
   vector<bool> powerDown;
 
   vector<Rank *> *ranks;

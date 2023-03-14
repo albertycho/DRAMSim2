@@ -494,6 +494,10 @@ void MemoryController::update() {
     //	assuming simple scheduling at the moment
     //	will eventually add policies here
     Transaction *transaction = prioQueue[i];
+    if (!transaction->prio) {
+      std::cerr << "ERROR: Not a prio transaction" << std::endl;
+      exit(1);
+    }
 
     // map address to rank,bank,row,col
     unsigned newTransactionChan, newTransactionRank, newTransactionBank,
@@ -730,7 +734,7 @@ void MemoryController::update() {
                        col);
         insertHistogram(currentClockCycle -
                             pendingReadTransactions[i]->timeAdded,
-                        rank, bank);
+                        rank, bank, pendingReadTransactions[i]->prio);
         // return latency
         returnReadData(pendingReadTransactions[i]);
 
@@ -793,6 +797,9 @@ void MemoryController::update() {
 }
 
 bool MemoryController::WillAcceptTransaction() {
+  if (prioQueue.size() >= TRANS_QUEUE_DEPTH) {
+    std::cerr << "Prio Queue full" << std::endl;
+  }
   return transactionQueue.size() < TRANS_QUEUE_DEPTH &&
          prioQueue.size() < TRANS_QUEUE_DEPTH;
 }
@@ -1007,6 +1014,20 @@ void MemoryController::printStats(bool finalStats) {
         csvOut.getOutputStream() << it->first << "=" << it->second << endl;
       }
     }
+    PRINT(" ---  Prio Latency list (" << prio_lats.size() << ")");
+    PRINT("       [lat] : #");
+    if (VIS_FILE_OUTPUT) {
+      csvOut.getOutputStream() << "!!PRIO_HISTOGRAM_DATA" << endl;
+    }
+
+    for (it = prio_lats.begin(); it != prio_lats.end(); it++) {
+      PRINT("       [" << it->first << "-"
+                       << it->first + (HISTOGRAM_BIN_SIZE - 1)
+                       << "] : " << it->second);
+      if (VIS_FILE_OUTPUT) {
+        csvOut.getOutputStream() << it->first << "=" << it->second << endl;
+      }
+    }
     if (currentClockCycle % EPOCH_LENGTH == 0) {
       PRINT(" --- Grand Total Bank usage list");
       for (size_t i = 0; i < NUM_RANKS; i++) {
@@ -1046,8 +1067,11 @@ MemoryController::~MemoryController() {
 }
 // inserts a latency into the latency histogram
 void MemoryController::insertHistogram(unsigned latencyValue, unsigned rank,
-                                       unsigned bank) {
+                                       unsigned bank, bool prio) {
   totalEpochLatency[SEQUENTIAL(rank, bank)] += latencyValue;
   // poor man's way to bin things.
   latencies[(latencyValue / HISTOGRAM_BIN_SIZE) * HISTOGRAM_BIN_SIZE]++;
+  if (prio) {
+    prio_lats[(latencyValue / HISTOGRAM_BIN_SIZE) * HISTOGRAM_BIN_SIZE]++;
+  }
 }
